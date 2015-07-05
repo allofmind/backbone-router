@@ -1,0 +1,190 @@
+$dark: #202020
+$darkred: #b81d18
+$gray: #b6b6b6
+$darkblue: #004687
+$lightgray: #f0f0f0
+
+=border-radius ($radius)
+  -webkit-border-radius: $radius
+  -moz-border-radius: $radius
+  -ms-border-radius: $radius
+  border-radius: $radius
+
+=box-sizing ($type: border-box)
+  -webkit-box-sizing: $type
+  -moz-box-sizing: $type
+  -o-box-sizing: $type
+  -ms-box-sizing: $type
+  box-sizing: $type
+
+=transition ($transition-property, $transition-time, $method)
+  -webkit-transition: $transition-property $transition-time $method
+  -moz-transition: $transition-property $transition-time $method
+  -ms-transition: $transition-property $transition-time $method
+  -o-transition: $transition-property $transition-time $method
+  transition: $transition-property $transition-time $method
+
+=transform ($transforms)
+  -moz-transform: $transforms
+  -o-transform: $transforms
+  -ms-transform: $transforms
+  -webkit-transform: $transforms
+  transform: $transforms
+
+=user-select ($setting: none)
+  -webkit-user-select: $setting
+  -moz-user-select: $setting
+  -ms-user-select: $setting
+  -o-user-select: $setting
+  user-select: $setting
+
+=transform-style ($style)
+  -webkit-transform-style: $style
+  -moz-transform-style: $style
+  -ms-transform-style: $style
+  transform-style: $style
+
+=perspective ($style)
+  -webkit-perspective: $style 
+  -moz-perspective: $style 
+  -ms-perspective: $style 
+  perspective: $style
+
+$dark: #202020
+$darkred: #b81d18
+$gray: #b6b6b6
+$darkblue: #004687
+$lightgray: #f0f0f0
+
+
+
+html
+  height: 100%
+
+body
+  margin: 0
+  font-family: "Roboto Condensed"
+  height: inherit
+  display: table
+  width: 100%
+  overflow: hidden
+  background-color: $dark
+
+h1
+  font-size: 1.5em
+
+a
+  text-decoration: none
+
+.clear
+  &:after
+    content: ""
+    display: block
+    clear: both
+
+.nav-container
+  display: table-row
+
+  .main-menu
+    display: table
+    overflow: hidden
+    height: 63px
+    background-color: $darkred
+    &:before
+      content: ""
+      display: table-cell
+      width: 100%
+    a
+      display: table-cell
+      vertical-align: middle
+      white-space: nowrap
+      padding-right: 25px
+      padding-left: 15px
+      text-transform: uppercase
+      font-size: 19px
+      position: relative
+      color: $lightgray
+      +transition(background-color, 0.3s, ease-in-out)
+      &:hover, .active
+        background-color: darken($darkred, 5)
+
+.main-container
+  display: table-row
+  height: 100%
+  +transform-style(preserve-3d)
+  +perspective(1300px)
+
+.main-footer
+  display: table-row
+  height: 50px
+  +box-sizing()
+  .common-link
+    display: table-cell
+    padding-left: 15px
+    padding-right: 15px
+    vertical-align: middle
+    text-align: right
+    a
+      color: #b81d18
+      font-weight: bold
+      text-transform: uppercase
+      font-size: 18px
+
+.content-container
+  display: table
+  width: 100%
+  height: 100%
+  .content
+    display: table-cell
+    width: 100%
+    height: 100%
+  .right-bar
+    display: table-cell
+    padding-left: 50px
+    .right-menu
+      position: relative
+      bottom: 0
+      a
+        color: #b81d18
+        display: block
+        white-space: nowrap
+        font-size: 17px
+        padding: 5px
+        text-align: right
+        +box-sizing()
+
+.lvl-1-container
+  position: relative
+  height: inherit
+  position: relative
+  +transform-style(preserve-3d)
+  +perspective(1300px)
+  .lvl-1
+    position: absolute
+    height: inherit
+    width: 100%
+    overflow: hidden
+    padding: 15px
+    background-color: $gray
+    +box-sizing()
+    header
+      display: table
+      height: 60px
+      h1
+        display: table-cell
+        vertical-align: middle
+      .search-plugin-container
+        display: table-cell
+        vertical-align: middle
+        padding-left: 60px
+    .lvl-2-container
+      position: relative
+      height: inherit
+      position: relative
+      +transform-style(preserve-3d)
+      +perspective(1300px)
+      .lvl-2
+        position: absolute
+
+.one
+  position: absolute

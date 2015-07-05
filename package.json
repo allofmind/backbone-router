@@ -1,0 +1,17 @@
+{
+  "name": "site",
+  "version": "0.0.1",
+  "dependencies": {
+    "express": "*",
+    "mongoose": "*"
+  },
+  "devDependencies": {
+    "coffee-script": "*",
+    "grunt": "*",
+    "grunt-contrib-coffee": "*",
+    "grunt-contrib-sass": "*",
+    "grunt-contrib-watch": "*",
+    "grunt-express-server": "*",
+    "grunt-shell-spawn": "^0.3.8"
+  }
+}
