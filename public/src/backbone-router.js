@@ -5,6 +5,13 @@
 
     /*
     
+    Баги:
+      1) Не исчезает вид если при настройках выключенного порядка;
+      2) Если быстро менять виды то не появляется;
+     */
+
+    /*
+    
     Модель роутинга:
      */
     var Router;
@@ -179,6 +186,8 @@
             } else {
               return callback();
             }
+          } else {
+            return callback();
           }
         };
 
@@ -375,14 +384,14 @@
           this.states = new StatesCollection(routesConfig);
           this.loadManager = new LoadManager(routesConfig);
           this.animations = new Animations(animationsConfig.animations);
-          this.animationsManager = new AnimationsManager(animationsConfig.animationsSettings);
+          this.animationsQueueManager = new AnimationsManager(animationsConfig.animationsSettings);
           this.priorityHandler = new PriorityHandler(animationsConfig.priorities);
         }
 
         RouterController.prototype.run = function(routes, params) {
           var count, i, len, results, routeName, routerKeys;
           routerKeys = Object.keys(routes);
-          this.animationsManager.maxCalls(routerKeys.length);
+          this.animationsQueueManager.maxCalls(routerKeys.length);
           results = [];
           for (count = i = 0, len = routerKeys.length; i < len; count = ++i) {
             routeName = routerKeys[count];
@@ -395,7 +404,7 @@
                     return currentState.get(function(instance) {
                       return _this.loadManager.onready(routeName, function() {
                         currentState.view = currentState.init(instance, params != null ? params[routeName] : void 0);
-                        return _this.animationsManager.onready(routeName, function(callback) {
+                        return _this.animationsQueueManager.onready(routeName, function(callback) {
                           _this.animations.go(routeName, "first", currentState.view, function() {
                             return callback();
                           });
@@ -404,14 +413,14 @@
                       });
                     });
                   case "first cache":
-                    return _this.animationsManager.onready(routeName, function(callback) {
+                    return _this.animationsQueueManager.onready(routeName, function(callback) {
                       _this.animations.go(routeName, "first", currentState.view, function() {
                         return callback();
                       });
                       return currentState.insert(currentState.view);
                     });
                   case "update":
-                    return _this.animationsManager.onready(routeName, function(callback) {
+                    return _this.animationsQueueManager.onready(routeName, function(callback) {
                       _this.animations.go(routeName, "update", currentState.view, function() {
                         return callback();
                       });
@@ -422,7 +431,7 @@
                     return currentState.get(function(instance) {
                       return _this.loadManager.onready(routeName, function() {
                         currentState.view = currentState.init(instance, params != null ? params[routeName] : void 0);
-                        return _this.animationsManager.onready(routeName, function(callback) {
+                        return _this.animationsQueueManager.onready(routeName, function(callback) {
                           _this.animations.go(routeName, animationName, currentState.view, function() {
                             return callback();
                           });
@@ -432,14 +441,14 @@
                     });
                   case "new cache":
                     animationName = _this.priorityHandler["return"](routes, routeName, "new cache");
-                    return _this.animationsManager.onready(routeName, function(callback) {
+                    return _this.animationsQueueManager.onready(routeName, function(callback) {
                       _this.animations.go(routeName, animationName, currentState.view, function() {
                         return callback();
                       });
                       return currentState.insert(currentState.view);
                     });
                   case "last":
-                    return _this.animationsManager.onready(routeName, function(callback) {
+                    return _this.animationsQueueManager.onready(routeName, function(callback) {
                       return _this.animations.go(routeName, "last", currentState.view, function() {
                         currentState.remove(currentState.view);
                         return callback();
@@ -447,18 +456,18 @@
                     });
                   case "old":
                     animationName = _this.priorityHandler["return"](routes, routeName, "old");
-                    return _this.animationsManager.onready(routeName, function(callback) {
+                    return _this.animationsQueueManager.onready(routeName, function(callback) {
                       return _this.animations.go(routeName, animationName, currentState.view, function() {
                         currentState.remove(currentState.view);
                         return callback();
                       });
                     });
                   case "visible":
-                    return _this.animationsManager.onready(routeName, function(callback) {
+                    return _this.animationsQueueManager.onready(routeName, function(callback) {
                       return callback();
                     });
                   default:
-                    return _this.animationsManager.onready(routeName, function(callback) {
+                    return _this.animationsQueueManager.onready(routeName, function(callback) {
                       return callback();
                     });
                 }

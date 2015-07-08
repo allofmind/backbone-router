@@ -2,6 +2,14 @@ define ->
 
   ###
 
+  Баги:
+    1) Не исчезает вид если при настройках выключенного порядка;
+    2) Если быстро менять виды то не появляется;
+
+  ###
+
+  ###
+
   Модель роутинга:
 
   ###
@@ -103,6 +111,8 @@ define ->
             @animations[selectorName].animations[animationName] element, callback
           else
             callback()
+        else
+          callback()
 
     ###
 
@@ -216,12 +226,12 @@ define ->
         @states = new StatesCollection routesConfig
         @loadManager = new LoadManager routesConfig
         @animations = new Animations animationsConfig.animations
-        @animationsManager = new AnimationsManager animationsConfig.animationsSettings
+        @animationsQueueManager = new AnimationsManager animationsConfig.animationsSettings
         @priorityHandler = new PriorityHandler animationsConfig.priorities
 
       run: (routes, params) ->
         routerKeys = Object.keys routes
-        @animationsManager.maxCalls routerKeys.length
+        @animationsQueueManager.maxCalls routerKeys.length
         for routeName, count in routerKeys
           do (routeName, routeParam = routes[routeName], count) =>
             currentState = @states.find routeName
@@ -230,15 +240,15 @@ define ->
                 currentState.get (instance) =>
                   @loadManager.onready routeName, =>
                     currentState.view = currentState.init instance, params?[routeName]
-                    @animationsManager.onready routeName, (callback) =>
+                    @animationsQueueManager.onready routeName, (callback) =>
                       @animations.go routeName, "first", currentState.view, -> callback()
                       currentState.insert currentState.view
               when "first cache"
-                @animationsManager.onready routeName, (callback) =>
+                @animationsQueueManager.onready routeName, (callback) =>
                   @animations.go routeName, "first", currentState.view, -> callback()
                   currentState.insert currentState.view
               when "update"
-                @animationsManager.onready routeName, (callback) =>
+                @animationsQueueManager.onready routeName, (callback) =>
                   @animations.go routeName, "update", currentState.view, -> callback()
                   currentState.update currentState.view, params?[routeName]
               when "new"
@@ -246,29 +256,29 @@ define ->
                 currentState.get (instance) =>
                   @loadManager.onready routeName, =>
                     currentState.view = currentState.init instance, params?[routeName]
-                    @animationsManager.onready routeName, (callback) =>
+                    @animationsQueueManager.onready routeName, (callback) =>
                       @animations.go routeName, animationName, currentState.view, -> callback()
                       currentState.insert currentState.view
               when "new cache"
                 animationName = @priorityHandler.return routes, routeName, "new cache"
-                @animationsManager.onready routeName, (callback) =>
+                @animationsQueueManager.onready routeName, (callback) =>
                   @animations.go routeName, animationName, currentState.view, -> callback()
                   currentState.insert currentState.view
               when "last"
-                @animationsManager.onready routeName, (callback) =>
+                @animationsQueueManager.onready routeName, (callback) =>
                   @animations.go routeName, "last", currentState.view, ->
                     currentState.remove currentState.view
                     callback()
               when "old"
                 animationName = @priorityHandler.return routes, routeName, "old"
-                @animationsManager.onready routeName, (callback) =>
+                @animationsQueueManager.onready routeName, (callback) =>
                   @animations.go routeName, animationName, currentState.view, ->
                     currentState.remove currentState.view
                     callback()
               when "visible"
-                @animationsManager.onready routeName, (callback) -> callback()
+                @animationsQueueManager.onready routeName, (callback) -> callback()
               else
-                @animationsManager.onready routeName, (callback) -> callback()
+                @animationsQueueManager.onready routeName, (callback) -> callback()
 
     ###
 

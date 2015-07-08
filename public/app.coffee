@@ -47,7 +47,7 @@ define [
       remove: (howItWork) -> howItWork.$el.remove()
     ".lvl-1-container:author":
       url: "view/author/view"
-      init: (Author, params) ->new Author params
+      init: (Author, params) -> new Author params
       insert: (author) -> $(".lvl-1-container").append author.$el
       update: (author, params) -> author.render params
       remove: (author) -> author.$el.remove()
@@ -55,25 +55,18 @@ define [
     animations:
       ".lvl-1-container:about":
         animations: lvl1ContainerViewAnimation
-        alwaysRun: on
       ".lvl-1-container:manual":
         animations: lvl1ContainerViewAnimation
-        alwaysRun: on
       ".lvl-1-container:manual>.lvl-2-container:info": 
         animations: lvl2ContainerViewAnimation
-        alwaysRun: off
       ".lvl-1-container:manual>.lvl-2-container:methods":
         animations: lvl2ContainerViewAnimation
-        alwaysRun: on
       ".lvl-1-container:manual>.lvl-2-container:core":
         animations: lvl2ContainerViewAnimation
-        alwaysRun: on
       ".lvl-1-container:manual>.lvl-2-container:how-it-work":
         animations: lvl2ContainerViewAnimation
-        alwaysRun: on
       ".lvl-1-container:author":
         animations: lvl1ContainerViewAnimation
-        alwaysRun: on
     animationsSettings:
       ".lvl-1-container:about":
         inOrder: on

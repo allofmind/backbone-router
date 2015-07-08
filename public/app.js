@@ -110,32 +110,25 @@
     }, {
       animations: {
         ".lvl-1-container:about": {
-          animations: lvl1ContainerViewAnimation,
-          alwaysRun: true
+          animations: lvl1ContainerViewAnimation
         },
         ".lvl-1-container:manual": {
-          animations: lvl1ContainerViewAnimation,
-          alwaysRun: true
+          animations: lvl1ContainerViewAnimation
         },
         ".lvl-1-container:manual>.lvl-2-container:info": {
-          animations: lvl2ContainerViewAnimation,
-          alwaysRun: false
+          animations: lvl2ContainerViewAnimation
         },
         ".lvl-1-container:manual>.lvl-2-container:methods": {
-          animations: lvl2ContainerViewAnimation,
-          alwaysRun: true
+          animations: lvl2ContainerViewAnimation
         },
         ".lvl-1-container:manual>.lvl-2-container:core": {
-          animations: lvl2ContainerViewAnimation,
-          alwaysRun: true
+          animations: lvl2ContainerViewAnimation
         },
         ".lvl-1-container:manual>.lvl-2-container:how-it-work": {
-          animations: lvl2ContainerViewAnimation,
-          alwaysRun: true
+          animations: lvl2ContainerViewAnimation
         },
         ".lvl-1-container:author": {
-          animations: lvl1ContainerViewAnimation,
-          alwaysRun: true
+          animations: lvl1ContainerViewAnimation
         }
       },
       animationsSettings: {
