@@ -32,6 +32,58 @@
         });
         return animate.play();
       },
+      last: function(view, done) {
+        var animate, params;
+        params = {
+          opacity: 1,
+          scaleX: 1,
+          scaleY: 1
+        };
+        animate = new TimelineMax({
+          paused: true,
+          onUpdate: function() {
+            return view.$el.css({
+              opacity: params.opacity,
+              transform: "scale(" + params.scaleX + ", " + params.scaleY + ")"
+            });
+          },
+          onComplete: function() {
+            return done();
+          }
+        });
+        animate.to(params, 1 / speed, {
+          opacity: 0,
+          scaleX: 0,
+          scaleY: 0
+        });
+        return animate.play();
+      },
+      update: function(view, done) {
+        var animate, params;
+        params = {
+          opacity: 0,
+          skewX: 15,
+          skewY: 15
+        };
+        animate = new TimelineMax({
+          paused: true,
+          onUpdate: function() {
+            return view.$el.css({
+              opacity: params.opacity,
+              transform: "skewX(" + params.skewX + "deg) skewY(" + params.skewY + "deg)"
+            });
+          },
+          onComplete: function() {
+            return done();
+          }
+        });
+        animate.to(params, 1 / speed, {
+          opacity: 1,
+          skewX: 0,
+          skewY: 0
+        });
+        return animate.play();
+      },
       topCenter: function(view, done) {
         var animate, params;
         params = {

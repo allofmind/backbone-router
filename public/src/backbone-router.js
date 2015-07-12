@@ -1,157 +1,215 @@
 (function() {
-  var hasProp = {}.hasOwnProperty;
-
   define(function() {
 
     /*
     
-    Баги:
-      1) Не исчезает вид если при настройках выключенного порядка;
-      2) Если быстро менять виды то не появляется;
-     */
-
-    /*
-    
-    Модель роутинга:
+    Роутер 1.0.0b
      */
     var Router;
     return Router = (function() {
 
       /*
       
-      2) На основе конфига создается классы с видами:
-        1) Хранятся в общем объекте коллекции под уникальным именем;
+        Объект для распределения данных между конфигами для последующего использования
        */
-      var Animations, AnimationsManager, LoadManager, RouterController, RouterCoordinator, StatesCollection;
+      var AnimationsHandler, AnimationsManager, ConfigBuilder, Listener, LoadManager, PriorityHandler, RouterCoordinator, State, _getParent;
 
-      StatesCollection = (function() {
-        var View;
-
-        View = (function() {
-          function View(url, position, init, insert, update, remove) {
-            this.url = url;
-            this.position = position;
-            this.init = init;
-            this.insert = insert;
-            this.update = update;
-            this.remove = remove;
-            this.instance = null;
-            this.view = null;
-          }
-
-          View.prototype.get = function(callback) {
-            if (this.instance) {
-              return callback(this.instance);
-            } else {
-              return require([this.url], (function(_this) {
-                return function(instance) {
-                  return callback(_this.instance = instance);
-                };
-              })(this));
-            }
+      ConfigBuilder = (function() {
+        function ConfigBuilder(routesConfig, animationsConfig, methodsConfig) {
+          var animationName, animationSelector, animationsNames, i, len, routeAnimationConfig, routeConfig, routeName;
+          this.config = {
+            states: {},
+            loads: [],
+            animationsProperties: {},
+            animations: {},
+            priorities: {},
+            coordinates: []
           };
-
-          return View;
-
-        })();
-
-        function StatesCollection(routerConfig) {
-          var routeName, routeSettings;
-          this.routes = {};
-          for (routeName in routerConfig) {
-            routeSettings = routerConfig[routeName];
-            this.routes[routeName] = new View(routeSettings.url, routeSettings.position, routeSettings.init, routeSettings.insert, routeSettings.update, routeSettings.remove);
+          for (routeName in routesConfig) {
+            routeConfig = routesConfig[routeName];
+            this.config.states[routeName] = {
+              url: routeConfig.url,
+              load: routeConfig.load ? routeConfig.load : methodsConfig.load,
+              initialize: routeConfig.initialize ? routeConfig.initialize : methodsConfig.initialize,
+              insert: routeConfig.insert ? routeConfig.insert : methodsConfig.insert,
+              update: routeConfig.update ? routeConfig.update : methodsConfig.update,
+              remove: routeConfig.remove ? routeConfig.remove : methodsConfig.remove
+            };
           }
+          this.config.loads = Object.keys(routesConfig);
+          for (routeName in routesConfig) {
+            routeConfig = routesConfig[routeName];
+            animationSelector = routeName.replace(/\:\w+/g, "");
+            this.config.animationsProperties[routeName] = {
+              show: (function() {
+                if (routeConfig.show) {
+                  return routeConfig.show;
+                } else {
+                  try {
+                    return animationsConfig[animationSelector].show;
+                  } catch (_error) {}
+                }
+              })(),
+              swap: (function() {
+                if (routeConfig.swap) {
+                  return routeConfig.swap;
+                } else {
+                  try {
+                    return animationsConfig[animationSelector].swap;
+                  } catch (_error) {}
+                }
+              })(),
+              hide: (function() {
+                if (routeConfig.hide) {
+                  return routeConfig.hide;
+                } else {
+                  try {
+                    return animationsConfig[animationSelector].hide;
+                  } catch (_error) {}
+                }
+              })()
+            };
+          }
+          animationsNames = ["first", "last", "update", "topCenter", "centerTop", "bottomCenter", "centerBottom", "leftCenter", "centerLeft", "rightCenter", "centerRight"];
+          for (routeName in routesConfig) {
+            routeConfig = routesConfig[routeName];
+            animationSelector = routeName.replace(/\:\w+/g, "");
+            this.config.animations[routeName] = routeAnimationConfig = {};
+            for (i = 0, len = animationsNames.length; i < len; i++) {
+              animationName = animationsNames[i];
+              routeAnimationConfig[animationName] = (function() {
+                if (routeConfig[animationName]) {
+                  return routeConfig[animationName];
+                } else {
+                  try {
+                    return animationsConfig[animationSelector].animations[animationName];
+                  } catch (_error) {}
+                }
+              })();
+            }
+          }
+          for (routeName in routesConfig) {
+            routeConfig = routesConfig[routeName];
+            this.config.priorities[routeName] = routeConfig.priority;
+          }
+          this.config.coordinates = Object.keys(routesConfig);
+          return this.config;
         }
 
-        StatesCollection.prototype.find = function(requiredStateName) {
-          var ref, stateConfig, stateName;
-          ref = this.routes;
-          for (stateName in ref) {
-            if (!hasProp.call(ref, stateName)) continue;
-            stateConfig = ref[stateName];
-            if (requiredStateName === stateName) {
-              return stateConfig;
-            }
-          }
-        };
-
-        return StatesCollection;
+        return ConfigBuilder;
 
       })();
 
 
       /*
       
-      4) Выстраивается два объекта каллбеков с зависимостями:
-        1) Зависимости при загрузке от родительского;
-        2) Зависимости от анимации родительского;
+        Объекты состояния
        */
 
-      LoadManager = (function() {
-        var Observer, getParent;
+      State = (function() {
+        function State(url, loadMethod, initialize, insert, update, remove) {
+          this.url = url;
+          this.loadMethod = loadMethod;
+          this.initialize = initialize;
+          this.insert = insert;
+          this.update = update;
+          this.remove = remove;
+          this.instance = null;
+          this.view = null;
+        }
 
-        Observer = (function() {
-          function Observer() {
-            this.callbacks = [];
-          }
-
-          Observer.prototype.add = function(callback) {
-            return this.callbacks.push(callback);
-          };
-
-          Observer.prototype.run = function() {
-            var callback, i, len, ref;
-            ref = this.callbacks;
-            for (i = 0, len = ref.length; i < len; i++) {
-              callback = ref[i];
-              callback();
-            }
-            return this.callbacks.length = 0;
-          };
-
-          return Observer;
-
-        })();
-
-        getParent = function(routeName) {
-          var parentIndex;
-          parentIndex = routeName.lastIndexOf(">");
-          if (parentIndex !== -1) {
-            return routeName.slice(0, parentIndex);
-          }
+        State.prototype.load = function(callback) {
+          return this.loadMethod(this.url, function(instance) {
+            return callback(this.instance = instance);
+          });
         };
 
-        function LoadManager(config) {
-          var name, params;
+        return State;
+
+      })();
+
+
+      /*
+      
+        Объект для асинхронной загрузки видов
+       */
+
+      _getParent = function(routeName) {
+        var parentIndex;
+        parentIndex = routeName.lastIndexOf(">");
+        if (parentIndex !== -1) {
+          return routeName.slice(0, parentIndex);
+        }
+      };
+
+      Listener = (function() {
+        function Listener() {
+          this.callbacks = {};
+        }
+
+        Listener.prototype.add = function(type, handler) {
+          var callbacks;
+          callbacks = this.callbacks[type];
+          if (!callbacks) {
+            callbacks = this.callbacks[type] = [];
+          }
+          return callbacks.push(handler);
+        };
+
+        Listener.prototype.run = function(type) {
+          var callback, callbacks, i, len;
+          callbacks = this.callbacks[type];
+          if (!callbacks) {
+            return;
+          }
+          for (i = 0, len = callbacks.length; i < len; i++) {
+            callback = callbacks[i];
+            callback();
+          }
+          return callbacks.length = 0;
+        };
+
+        return Listener;
+
+      })();
+
+      LoadManager = (function() {
+        function LoadManager(routes) {
+          var i, len, route;
           this.status = {};
-          this.observers = {};
-          for (name in config) {
-            params = config[name];
-            this.observers[name] = new Observer;
+          this.listeners = {};
+          for (i = 0, len = routes.length; i < len; i++) {
+            route = routes[i];
+            this.status[route] = "unused";
+            this.listeners[route] = new Listener;
           }
         }
 
+        LoadManager.prototype.complete = function(routeName, callback) {
+          this.status[routeName] = "loaded";
+          callback();
+          return this.listeners[routeName].run("load");
+        };
+
         LoadManager.prototype.onready = function(routeName, callback) {
           var parent;
-          parent = getParent(routeName);
+          parent = _getParent(routeName);
           if (parent) {
             if (this.status[parent] === "loaded") {
-              this.status[routeName] = "loaded";
-              callback();
-              return this.observers[routeName].run();
+              return this.complete(routeName, function() {
+                return callback();
+              });
             } else {
-              return this.observers[parent].add((function(_this) {
-                return function() {
-                  callback();
-                  return _this.observers[routeName].run();
-                };
-              })(this));
+              return this.listeners[parent].add("load", function() {
+                return this.complete(routeName, function() {
+                  return callback();
+                });
+              });
             }
           } else {
-            this.status[routeName] = "loaded";
-            callback();
-            return this.observers[routeName].run();
+            return this.complete(routeName, function() {
+              return callback();
+            });
           }
         };
 
@@ -162,338 +220,216 @@
 
       /*
       
-      5) Анимационный движок:
-        1) Хранит функции анимаций;
-        2) Выполняет анимацию в зависимости от priority;
-        3) Проверяет свойства alwaysRun и запускает анимации для дочерних;
-        4) Проверяет свойство inOrder и проводит анимации в порядке;
-       */
-
-      Animations = (function() {
-        function Animations(animations) {
-          var animationConfig, animationName;
-          this.animations = {};
-          for (animationName in animations) {
-            animationConfig = animations[animationName];
-            this.animations[animationName] = animationConfig;
-          }
-        }
-
-        Animations.prototype.go = function(selectorName, animationName, element, callback) {
-          if (selectorName.indexOf(">") === -1 || selectorName.indexOf(">") !== -1 && this.animations[selectorName].alwaysRun) {
-            if (this.animations[selectorName].animations[animationName]) {
-              return this.animations[selectorName].animations[animationName](element, callback);
-            } else {
-              return callback();
-            }
-          } else {
-            return callback();
-          }
-        };
-
-        return Animations;
-
-      })();
-
-
-      /*
-      
-      1) Главный контролирующий загрузки и анимации объект:
-        1) Берет объект каллбеков загрузки и пользуется им;
-        2) Берет объект каллбеков анимаций и пользуется им;
+        Дает право выполнять внутрненние асинхронные операции в соответствии с порядком
        */
 
       AnimationsManager = (function() {
-        var DoubleListener;
-
-        DoubleListener = (function() {
-          function DoubleListener() {
-            this.preCallbacks = [];
-            this.postCallbacks = [];
-          }
-
-          DoubleListener.prototype.pre = function(callback) {
-            return this.preCallbacks.push(callback);
-          };
-
-          DoubleListener.prototype.post = function(callback) {
-            return this.postCallbacks.push(callback);
-          };
-
-          DoubleListener.prototype.run = function(callback) {
-            var i, len, preCallback, ref;
-            callback((function(_this) {
-              return function() {
-                var i, len, postCallback, ref;
-                ref = _this.postCallbacks;
-                for (i = 0, len = ref.length; i < len; i++) {
-                  postCallback = ref[i];
-                  postCallback();
-                }
-                return _this.postCallbacks.length = 0;
-              };
-            })(this));
-            ref = this.preCallbacks;
-            for (i = 0, len = ref.length; i < len; i++) {
-              preCallback = ref[i];
-              preCallback();
-            }
-            return this.preCallbacks.length = 0;
-          };
-
-          return DoubleListener;
-
-        })();
-
-        function AnimationsManager(animationsSettings) {
-          var animationName, animationSettings;
-          this.settings = {};
+        function AnimationsManager(animationsConfig) {
+          var animationConfig, animationName;
+          this.options = {};
           this.listeners = {};
-          this.parents = [];
-          for (animationName in animationsSettings) {
-            animationSettings = animationsSettings[animationName];
-            this.settings[animationName] = animationSettings;
-            this.listeners[animationName] = new DoubleListener;
+          for (animationName in animationsConfig) {
+            animationConfig = animationsConfig[animationName];
+            this.options[animationName] = animationConfig;
+            this.listeners[animationName] = new Listener;
           }
+          this.count = 0;
+          this.length = Object.keys(animationsConfig).length;
+          this.handlers = [];
         }
 
-        AnimationsManager.prototype.onready = (function() {
-          var count;
-          count = 0;
-          return function(routeName, callback) {
-            var i, len, parent, parentIndex, ref, startCallback;
-            parentIndex = routeName.lastIndexOf(">");
-            if (parentIndex !== -1) {
-              parent = routeName.slice(0, parentIndex);
+        AnimationsManager.prototype.run = function() {
+          var handlerToRun, i, len, ref;
+          if (this.count >= 0) {
+            this.count++;
+          } else {
+            this.count = 1;
+          }
+          if (this.count === this.length) {
+            ref = this.handlers;
+            for (i = 0, len = ref.length; i < len; i++) {
+              handlerToRun = ref[i];
+              handlerToRun();
             }
-            if (parent) {
-              if (this.settings[routeName].inOrder) {
-                this.listeners[parent].post((function(_this) {
-                  return function() {
-                    return _this.listeners[routeName].run(callback);
-                  };
-                })(this));
-              } else {
-                this.listeners[parent].pre((function(_this) {
-                  return function() {
-                    return _this.listeners[routeName].run(callback);
-                  };
-                })(this));
-              }
-            } else {
-              this.parents.push((function(_this) {
-                return function() {
-                  return _this.listeners[routeName].run(callback);
-                };
-              })(this));
-            }
-            if (++count === this.callbacksLength) {
-              ref = this.parents;
-              for (i = 0, len = ref.length; i < len; i++) {
-                startCallback = ref[i];
-                startCallback();
-              }
-              this.parents.length = 0;
-              this.callbacksLength = 0;
-              return count = 0;
-            }
-          };
-        })();
+            this.count = 0;
+            return this.handlers.length = 0;
+          }
+        };
 
-        AnimationsManager.prototype.maxCalls = function(callbacksLength) {
-          this.callbacksLength = callbacksLength;
+        AnimationsManager.prototype.onready = function(action, name, handlers, callback) {
+          var afterEndHandler, afterStartHandler, currentListener, handlres, option, parent, parentIndex, parentListener;
+          option = this.options[name][action];
+          currentListener = this.listeners[name];
+          afterEndHandler = handlers.afterEnd;
+          afterStartHandler = handlers.afterStart;
+          parentIndex = name.lastIndexOf(">");
+          if (parentIndex !== -1) {
+            parent = name.slice(0, parentIndex);
+            parentListener = this.listeners[parent];
+            switch (option) {
+              case "free":
+                parentListener.add("afterStart", (function(_this) {
+                  return function() {
+                    callback(function() {
+                      try {
+                        afterEndHandler();
+                      } catch (_error) {}
+                      return currentListener.run("afterEnd");
+                    });
+                    return setTimeout(function() {
+                      try {
+                        afterStartHandler();
+                      } catch (_error) {}
+                      return currentListener.run("afterStart");
+                    });
+                  };
+                })(this));
+                break;
+              case "order":
+                parentListener.add("afterEnd", (function(_this) {
+                  return function() {
+                    callback(function() {
+                      try {
+                        afterEndHandler();
+                      } catch (_error) {}
+                      return currentListener.run("afterEnd");
+                    });
+                    return setTimeout(function() {
+                      try {
+                        afterStartHandler();
+                      } catch (_error) {}
+                      return currentListener.run("afterStart");
+                    });
+                  };
+                })(this));
+                break;
+              case "none":
+                parentListener.add("afterStart", (function(_this) {
+                  return function() {
+                    return setTimeout(function() {
+                      try {
+                        afterStartHandler();
+                        afterEndHandler();
+                      } catch (_error) {}
+                      currentListener.run("afterStart");
+                      return currentListener.run("afterEnd");
+                    });
+                  };
+                })(this));
+            }
+          } else {
+            if (!this.handlers) {
+              this.handlers = [];
+            }
+            handlres = this.handlers;
+            switch (option) {
+              case "free" || "order":
+                handlres.push((function(_this) {
+                  return function() {
+                    callback(function() {
+                      try {
+                        afterEndHandler();
+                      } catch (_error) {}
+                      return currentListener.run("afterEnd");
+                    });
+                    return setTimeout(function() {
+                      try {
+                        afterStartHandler();
+                      } catch (_error) {}
+                      return currentListener.run("afterStart");
+                    });
+                  };
+                })(this));
+                break;
+              case "none":
+                handlres.push((function(_this) {
+                  return function() {
+                    setTimeout(function() {
+                      try {
+                        afterStartHandler();
+                        afterEndHandler();
+                      } catch (_error) {}
+                      return currentListener.run("afterStart");
+                    });
+                    return currentListener.run("afterEnd");
+                  };
+                })(this));
+            }
+          }
+          return this.run();
+        };
+
+        AnimationsManager.prototype.empty = function(settings) {
+          var currentListener, handlres, name, parent, parentIndex, parentListener;
+          name = settings.name;
+          currentListener = this.listeners[name];
+          parentIndex = name.lastIndexOf(">");
+          if (parentIndex !== -1) {
+            parent = name.slice(0, parentIndex);
+            if (!this.listeners[parent]) {
+              this.listeners[parent] = new Listener;
+            }
+            parentListener = this.listeners[parent];
+            parentListener.add("afterEnd", (function(_this) {
+              return function() {
+                return setTimeout(function() {
+                  currentListener.run("afterStart");
+                  return currentListener.run("afterEnd");
+                });
+              };
+            })(this));
+          } else {
+            if (!this.handlers) {
+              this.handlers = [];
+            }
+            handlres = this.handlers;
+            handlres.push((function(_this) {
+              return function() {
+                return setTimeout(function() {
+                  currentListener.run("afterStart");
+                  return currentListener.run("afterEnd");
+                });
+              };
+            })(this));
+          }
+          return this.run();
         };
 
         return AnimationsManager;
 
       })();
 
-      RouterController = (function() {
-        var PriorityHandler;
-
-        PriorityHandler = (function() {
-          function PriorityHandler(priorities) {
-            var priorityName, prioritySettings;
-            this.priorityMap = {};
-            for (priorityName in priorities) {
-              prioritySettings = priorities[priorityName];
-              this.priorityMap[priorityName] = prioritySettings.priority;
-            }
+      AnimationsHandler = (function() {
+        function AnimationsHandler(animationsConfig) {
+          var animationConfig, animationName;
+          this.animations = {};
+          for (animationName in animationsConfig) {
+            animationConfig = animationsConfig[animationName];
+            this.animations[animationName] = animationConfig;
           }
-
-          PriorityHandler.prototype.findPair = function(routes, matchRouteName, type) {
-            var matchString, routerName, routerValue;
-            matchString = matchRouteName.slice(0, matchRouteName.lastIndexOf(":"));
-            for (routerName in routes) {
-              routerValue = routes[routerName];
-              if (routerName.indexOf(matchString) !== -1) {
-                if (routerName.slice(matchString.length).indexOf(">") === -1) {
-                  if (type === "old") {
-                    if (routerValue === "new cache" || routerValue === "new") {
-                      return routerName;
-                    }
-                  } else if (type === "new cache" || type === "new") {
-                    if (routerValue === "old") {
-                      return routerName;
-                    }
-                  }
-                }
-              }
-            }
-          };
-
-          PriorityHandler.prototype["return"] = function(routes, routeName, routeParam) {
-            var currentHorisontalPriority, currentVerticalPriority, pairRoute, previriousHorisontalPriority, previriousVerticalPriority;
-            pairRoute = this.findPair(routes, routeName, routeParam);
-            previriousVerticalPriority = this.priorityMap[routeName][0];
-            previriousHorisontalPriority = this.priorityMap[routeName][1];
-            currentVerticalPriority = this.priorityMap[pairRoute][0];
-            currentHorisontalPriority = this.priorityMap[pairRoute][1];
-            if (routeParam === "old") {
-              if (previriousVerticalPriority > currentVerticalPriority) {
-                return "centerBottom";
-              } else if (previriousVerticalPriority < currentVerticalPriority) {
-                return "centerTop";
-              } else if (previriousVerticalPriority === currentVerticalPriority) {
-                if (previriousHorisontalPriority > currentHorisontalPriority) {
-                  return "centerRight";
-                } else if (previriousHorisontalPriority < currentHorisontalPriority) {
-                  return "centerLeft";
-                }
-              }
-            } else if (routeParam === "new" || routeParam === "new cache") {
-              if (previriousVerticalPriority > currentVerticalPriority) {
-                return "bottomCenter";
-              } else if (previriousVerticalPriority < currentVerticalPriority) {
-                return "topCenter";
-              } else if (previriousVerticalPriority === currentVerticalPriority) {
-                if (previriousHorisontalPriority > currentHorisontalPriority) {
-                  return "rightCenter";
-                } else if (previriousHorisontalPriority < currentHorisontalPriority) {
-                  return "leftCenter";
-                }
-              }
-            }
-          };
-
-          return PriorityHandler;
-
-        })();
-
-        function RouterController(routesConfig, animationsConfig) {
-          this.states = new StatesCollection(routesConfig);
-          this.loadManager = new LoadManager(routesConfig);
-          this.animations = new Animations(animationsConfig.animations);
-          this.animationsQueueManager = new AnimationsManager(animationsConfig.animationsSettings);
-          this.priorityHandler = new PriorityHandler(animationsConfig.priorities);
         }
 
-        RouterController.prototype.run = function(routes, params) {
-          var count, i, len, results, routeName, routerKeys;
-          routerKeys = Object.keys(routes);
-          this.animationsQueueManager.maxCalls(routerKeys.length);
-          results = [];
-          for (count = i = 0, len = routerKeys.length; i < len; count = ++i) {
-            routeName = routerKeys[count];
-            results.push((function(_this) {
-              return function(routeName, routeParam, count) {
-                var animationName, currentState;
-                currentState = _this.states.find(routeName);
-                switch (routeParam) {
-                  case "first":
-                    return currentState.get(function(instance) {
-                      return _this.loadManager.onready(routeName, function() {
-                        currentState.view = currentState.init(instance, params != null ? params[routeName] : void 0);
-                        return _this.animationsQueueManager.onready(routeName, function(callback) {
-                          _this.animations.go(routeName, "first", currentState.view, function() {
-                            return callback();
-                          });
-                          return currentState.insert(currentState.view);
-                        });
-                      });
-                    });
-                  case "first cache":
-                    return _this.animationsQueueManager.onready(routeName, function(callback) {
-                      _this.animations.go(routeName, "first", currentState.view, function() {
-                        return callback();
-                      });
-                      return currentState.insert(currentState.view);
-                    });
-                  case "update":
-                    return _this.animationsQueueManager.onready(routeName, function(callback) {
-                      _this.animations.go(routeName, "update", currentState.view, function() {
-                        return callback();
-                      });
-                      return currentState.update(currentState.view, params != null ? params[routeName] : void 0);
-                    });
-                  case "new":
-                    animationName = _this.priorityHandler["return"](routes, routeName, "new");
-                    return currentState.get(function(instance) {
-                      return _this.loadManager.onready(routeName, function() {
-                        currentState.view = currentState.init(instance, params != null ? params[routeName] : void 0);
-                        return _this.animationsQueueManager.onready(routeName, function(callback) {
-                          _this.animations.go(routeName, animationName, currentState.view, function() {
-                            return callback();
-                          });
-                          return currentState.insert(currentState.view);
-                        });
-                      });
-                    });
-                  case "new cache":
-                    animationName = _this.priorityHandler["return"](routes, routeName, "new cache");
-                    return _this.animationsQueueManager.onready(routeName, function(callback) {
-                      _this.animations.go(routeName, animationName, currentState.view, function() {
-                        return callback();
-                      });
-                      return currentState.insert(currentState.view);
-                    });
-                  case "last":
-                    return _this.animationsQueueManager.onready(routeName, function(callback) {
-                      return _this.animations.go(routeName, "last", currentState.view, function() {
-                        currentState.remove(currentState.view);
-                        return callback();
-                      });
-                    });
-                  case "old":
-                    animationName = _this.priorityHandler["return"](routes, routeName, "old");
-                    return _this.animationsQueueManager.onready(routeName, function(callback) {
-                      return _this.animations.go(routeName, animationName, currentState.view, function() {
-                        currentState.remove(currentState.view);
-                        return callback();
-                      });
-                    });
-                  case "visible":
-                    return _this.animationsQueueManager.onready(routeName, function(callback) {
-                      return callback();
-                    });
-                  default:
-                    return _this.animationsQueueManager.onready(routeName, function(callback) {
-                      return callback();
-                    });
-                }
-              };
-            })(this)(routeName, routes[routeName], count));
-          }
-          return results;
+        AnimationsHandler.prototype["do"] = function(routeName, animationName, view, callback) {
+          var currentAnimation;
+          try {
+            currentAnimation = this.animations[routeName][animationName];
+            return currentAnimation(view, function() {
+              return callback();
+            });
+          } catch (_error) {}
         };
 
-        return RouterController;
+        return AnimationsHandler;
 
       })();
 
 
       /*
       
-      3) Объект предоставляющий текущее состояние роутера:
-        1) Хранит и обновляет текущее состояние роутера;
+        Координирует запросы на обновление роутинга
        */
 
       RouterCoordinator = (function() {
-
-        /*
-          
-          Мы можем узнать был ли на одном из селекторов ранее new или first или update или visible но на другом
-         */
         var _isActive, _isNew, _isOld, _isUpdate;
 
         _isNew = function(states, checkedStateName) {
@@ -519,7 +455,7 @@
             result = false;
             for (cacheName in cache) {
               cacheValue = cache[cacheName];
-              if (cacheName === stateName && cacheValue === stateParamsJSON) {
+              if (cacheName === stateName && cacheValue !== stateParamsJSON) {
                 result = true;
               }
             }
@@ -554,17 +490,17 @@
           }
         };
 
-        function RouterCoordinator(statesConfig) {
-          var stateConfig, stateName;
+        function RouterCoordinator(coordinatesList) {
+          var coordinate, i, len;
           this.config = {};
-          for (stateName in statesConfig) {
-            stateConfig = statesConfig[stateName];
-            this.config[stateName] = "unused";
+          for (i = 0, len = coordinatesList.length; i < len; i++) {
+            coordinate = coordinatesList[i];
+            this.config[coordinate] = "unused";
           }
         }
 
         RouterCoordinator.prototype.update = function(requiredStates) {
-          var configStateName, configStateValue, currentStateParam, isActive, isNew, isOld, isUpdate, ref, requiredStateName, requiredStateParams, results;
+          var configStateName, configStateValue, currentStateParam, isActive, isNew, isOld, isUpdate, ref, requiredStateName, requiredStateParams;
           for (requiredStateName in requiredStates) {
             requiredStateParams = requiredStates[requiredStateName];
             currentStateParam = this.config[requiredStateName];
@@ -585,36 +521,254 @@
             }
           }
           ref = this.config;
-          results = [];
           for (configStateName in ref) {
             configStateValue = ref[configStateName];
             isActive = _isActive(requiredStates, configStateName);
             isOld = _isOld(this.config, configStateName);
             if (!isActive && !isOld && (configStateValue === "first" || configStateValue === "first cache" || configStateValue === "new" || configStateValue === "new cache" || configStateValue === "update" || configStateValue === "visible")) {
-              results.push(this.config[configStateName] = "last");
+              this.config[configStateName] = "last";
             } else if (!isActive && isOld && (configStateValue === "first" || configStateValue === "first cache" || configStateValue === "new" || configStateValue === "new cache" || configStateValue === "update" || configStateValue === "visible")) {
-              results.push(this.config[configStateName] = "old");
+              this.config[configStateName] = "old";
             } else if (configStateValue === "last" || configStateValue === "old") {
-              results.push(this.config[configStateName] = "invisible");
-            } else {
-              results.push(void 0);
+              this.config[configStateName] = "invisible";
             }
           }
-          return results;
+          return this.config;
         };
 
         return RouterCoordinator;
 
       })();
 
-      function Router(statesConfig, animationsConfig) {
-        this.routerController = new RouterController(statesConfig, animationsConfig);
-        this.routerCoordinator = new RouterCoordinator(statesConfig);
+
+      /*
+      
+        Обрабатывает параметры приоритетов видов
+       */
+
+      PriorityHandler = (function() {
+        function PriorityHandler(priorities) {
+          var priorityName, priorityValue;
+          this.priorityMap = {};
+          for (priorityName in priorities) {
+            priorityValue = priorities[priorityName];
+            this.priorityMap[priorityName] = priorityValue;
+          }
+        }
+
+        PriorityHandler.prototype.findPair = function(routes, matchRouteName, type) {
+          var matchString, routerName, routerValue;
+          matchString = matchRouteName.slice(0, matchRouteName.lastIndexOf(":"));
+          for (routerName in routes) {
+            routerValue = routes[routerName];
+            if (routerName.indexOf(matchString) !== -1) {
+              if (routerName.slice(matchString.length).indexOf(">") === -1) {
+                if (type === "old") {
+                  if (routerValue === "new cache" || routerValue === "new") {
+                    return routerName;
+                  }
+                } else if (type === "new cache" || type === "new") {
+                  if (routerValue === "old") {
+                    return routerName;
+                  }
+                }
+              }
+            }
+          }
+        };
+
+        PriorityHandler.prototype.animationName = function(routes, routeName, routeParam) {
+          var currentHorisontalPriority, currentVerticalPriority, pairRoute, previriousHorisontalPriority, previriousVerticalPriority;
+          pairRoute = this.findPair(routes, routeName, routeParam);
+          previriousVerticalPriority = this.priorityMap[routeName][0];
+          previriousHorisontalPriority = this.priorityMap[routeName][1];
+          currentVerticalPriority = this.priorityMap[pairRoute][0];
+          currentHorisontalPriority = this.priorityMap[pairRoute][1];
+          if (routeParam === "old") {
+            if (previriousVerticalPriority > currentVerticalPriority) {
+              return "centerBottom";
+            } else if (previriousVerticalPriority < currentVerticalPriority) {
+              return "centerTop";
+            } else if (previriousVerticalPriority === currentVerticalPriority) {
+              if (previriousHorisontalPriority > currentHorisontalPriority) {
+                return "centerRight";
+              } else if (previriousHorisontalPriority < currentHorisontalPriority) {
+                return "centerLeft";
+              }
+            }
+          } else if (routeParam === "new" || routeParam === "new cache") {
+            if (previriousVerticalPriority > currentVerticalPriority) {
+              return "bottomCenter";
+            } else if (previriousVerticalPriority < currentVerticalPriority) {
+              return "topCenter";
+            } else if (previriousVerticalPriority === currentVerticalPriority) {
+              if (previriousHorisontalPriority > currentHorisontalPriority) {
+                return "rightCenter";
+              } else if (previriousHorisontalPriority < currentHorisontalPriority) {
+                return "leftCenter";
+              }
+            }
+          }
+        };
+
+        return PriorityHandler;
+
+      })();
+
+      function Router(routesConfig, animationsConfig, methodsConfig) {
+        var ref, stateName, stateSettings;
+        this.config = new ConfigBuilder(routesConfig, animationsConfig, methodsConfig);
+        this.states = {};
+        ref = this.config.states;
+        for (stateName in ref) {
+          stateSettings = ref[stateName];
+          this.states[stateName] = new State(stateSettings.url, stateSettings.load, stateSettings.initialize, stateSettings.insert, stateSettings.update, stateSettings.remove);
+        }
+        this.loadManager = new LoadManager(this.config.loads);
+        this.animationsManager = new AnimationsManager(this.config.animationsProperties);
+        this.animationsHandler = new AnimationsHandler(this.config.animations);
+        this.routerCoordinator = new RouterCoordinator(this.config.coordinates);
+        this.priorityHandler = new PriorityHandler(this.config.priorities);
       }
 
       Router.prototype.go = function(requiredStates) {
-        this.routerCoordinator.update(requiredStates);
-        return this.routerController.run(this.routerCoordinator.config, requiredStates);
+        var count, i, len, results, routeName, routerKeys, stateCoordinates;
+        stateCoordinates = this.routerCoordinator.update(requiredStates);
+        routerKeys = Object.keys(stateCoordinates);
+        results = [];
+        for (count = i = 0, len = routerKeys.length; i < len; count = ++i) {
+          routeName = routerKeys[count];
+          results.push((function(_this) {
+            return function(routeName, routeCoordinate) {
+              var animationName, currentState, currentStateChainNames, currentStateSelector;
+              currentState = _this.states[routeName];
+              currentStateChainNames = routeName.split(">");
+              currentStateSelector = currentStateChainNames[currentStateChainNames.length - 1].split(":")[0];
+              switch (routeCoordinate) {
+                case "first":
+                  return currentState.load(function(instance) {
+                    return _this.loadManager.onready(routeName, function() {
+                      currentState.view = currentState.initialize(instance, typeof params !== "undefined" && params !== null ? params[routeName] : void 0);
+                      return (function(view) {
+                        return _this.animationsManager.onready("show", routeName, {
+                          afterStart: function() {
+                            return currentState.insert(currentStateSelector, view);
+                          }
+                        }, function(done) {
+                          return _this.animationsHandler["do"](routeName, "first", view, function() {
+                            return done();
+                          });
+                        });
+                      })(currentState.view);
+                    });
+                  });
+                case "first cache":
+                  return currentState.load(function(instance) {
+                    return _this.loadManager.onready(routeName, function() {
+                      currentState.view = currentState.initialize(instance, typeof params !== "undefined" && params !== null ? params[routeName] : void 0);
+                      return (function(view) {
+                        return _this.animationsManager.onready("show", routeName, {
+                          afterStart: function() {
+                            return currentState.insert(currentStateSelector, view);
+                          }
+                        }, function(done) {
+                          return _this.animationsHandler["do"](routeName, "first", view, function() {
+                            return done();
+                          });
+                        });
+                      })(currentState.view);
+                    });
+                  });
+                case "update":
+                  return _this.loadManager.onready(routeName, function() {
+                    return (function(view) {
+                      return _this.animationsManager.onready("show", routeName, {
+                        afterStart: function() {
+                          return currentState.update(currentState.view, typeof params !== "undefined" && params !== null ? params[routeName] : void 0);
+                        }
+                      }, function(done) {
+                        return _this.animationsHandler["do"](routeName, "update", view, function() {
+                          return done();
+                        });
+                      });
+                    })(currentState.view);
+                  });
+                case "new":
+                  return currentState.load(function(instance) {
+                    var animationName;
+                    animationName = _this.priorityHandler.animationName(stateCoordinates, routeName, "new");
+                    return _this.loadManager.onready(routeName, function() {
+                      currentState.view = currentState.initialize(instance, typeof params !== "undefined" && params !== null ? params[routeName] : void 0);
+                      return (function(view) {
+                        return _this.animationsManager.onready("swap", routeName, {
+                          afterStart: function() {
+                            return currentState.insert(currentStateSelector, view);
+                          }
+                        }, function(done) {
+                          return _this.animationsHandler["do"](routeName, animationName, view, function() {
+                            return done();
+                          });
+                        });
+                      })(currentState.view);
+                    });
+                  });
+                case "new cache":
+                  return currentState.load(function(instance) {
+                    var animationName;
+                    animationName = _this.priorityHandler.animationName(stateCoordinates, routeName, "new");
+                    return _this.loadManager.onready(routeName, function() {
+                      currentState.view = currentState.initialize(instance, typeof params !== "undefined" && params !== null ? params[routeName] : void 0);
+                      return (function(view) {
+                        return _this.animationsManager.onready("swap", routeName, {
+                          afterStart: function() {
+                            return currentState.insert(currentStateSelector, view);
+                          }
+                        }, function(done) {
+                          return _this.animationsHandler["do"](routeName, animationName, view, function() {
+                            return done();
+                          });
+                        });
+                      })(currentState.view);
+                    });
+                  });
+                case "last":
+                  return _this.loadManager.onready(routeName, function() {
+                    return (function(view) {
+                      return _this.animationsManager.onready("hide", routeName, {
+                        afterEnd: function() {
+                          return currentState.remove(view);
+                        }
+                      }, function(done) {
+                        return _this.animationsHandler["do"](routeName, "last", view, function() {
+                          return done();
+                        });
+                      });
+                    })(currentState.view);
+                  });
+                case "old":
+                  animationName = _this.priorityHandler.animationName(stateCoordinates, routeName, "old");
+                  return _this.loadManager.onready(routeName, function() {
+                    return (function(view) {
+                      return _this.animationsManager.onready("hide", routeName, {
+                        afterEnd: function() {
+                          return currentState.remove(view);
+                        }
+                      }, function(done) {
+                        return _this.animationsHandler["do"](routeName, animationName, view, function() {
+                          return done();
+                        });
+                      });
+                    })(currentState.view);
+                  });
+                default:
+                  return _this.animationsManager.empty({
+                    name: routeName
+                  });
+              }
+            };
+          })(this)(routeName, stateCoordinates[routeName]));
+        }
+        return results;
       };
 
       return Router;

@@ -2,15 +2,7 @@ define ->
 
   ###
 
-  Баги:
-    1) Не исчезает вид если при настройках выключенного порядка;
-    2) Если быстро менять виды то не появляется;
-
-  ###
-
-  ###
-
-  Модель роутинга:
+  Роутер 1.0.0b
 
   ###
 
@@ -18,282 +10,256 @@ define ->
 
     ###
 
-    2) На основе конфига создается классы с видами:
-      1) Хранятся в общем объекте коллекции под уникальным именем;
+      Объект для распределения данных между конфигами для последующего использования
 
     ###
 
-    class StatesCollection
+    class ConfigBuilder
+      constructor: (routesConfig, animationsConfig, methodsConfig) ->
+        @config =
+          states: { }
+          loads: [ ]
+          animationsProperties: { }
+          animations: { }
+          priorities: { }
+          coordinates: [ ]
 
-      class View
-        constructor: (@url, @position, @init, @insert, @update, @remove) ->
-          @instance = null
-          @view = null
+        for routeName, routeConfig of routesConfig
+          @config.states[routeName] =
+            url: routeConfig.url
+            load: if routeConfig.load then routeConfig.load else methodsConfig.load
+            initialize: if routeConfig.initialize then routeConfig.initialize else methodsConfig.initialize
+            insert: if routeConfig.insert then routeConfig.insert else methodsConfig.insert
+            update: if routeConfig.update then routeConfig.update else methodsConfig.update
+            remove: if routeConfig.remove then routeConfig.remove else methodsConfig.remove
 
-        get: (callback) -> 
-          if @instance
-            callback @instance
-          else
-            require [ @url ], (instance) =>
-              callback @instance = instance
+        @config.loads = Object.keys routesConfig
 
-      constructor: (routerConfig) ->
-        @routes = { }
-        @routes[routeName] = new View routeSettings.url, routeSettings.position, routeSettings.init, routeSettings.insert, routeSettings.update, routeSettings.remove for routeName, routeSettings of routerConfig
+        for routeName, routeConfig of routesConfig
+          animationSelector = routeName.replace /\:\w+/g, ""
+          @config.animationsProperties[routeName] =
+            show: if routeConfig.show then routeConfig.show else try animationsConfig[animationSelector].show
+            swap: if routeConfig.swap then routeConfig.swap else try animationsConfig[animationSelector].swap
+            hide: if routeConfig.hide then routeConfig.hide else try animationsConfig[animationSelector].hide
 
-      find: (requiredStateName) ->
-        return stateConfig for own stateName, stateConfig of @routes when requiredStateName is stateName
+        animationsNames = [ "first", "last", "update", "topCenter", "centerTop", "bottomCenter", "centerBottom", "leftCenter", "centerLeft", "rightCenter", "centerRight" ]
+
+        for routeName, routeConfig of routesConfig
+          animationSelector = routeName.replace /\:\w+/g, ""
+          @config.animations[routeName] = routeAnimationConfig = { }
+          for animationName in animationsNames
+            routeAnimationConfig[animationName] = if routeConfig[animationName] then routeConfig[animationName] else try animationsConfig[animationSelector].animations[animationName]
+
+        for routeName, routeConfig of routesConfig
+          @config.priorities[routeName] = routeConfig.priority
+
+        @config.coordinates = Object.keys routesConfig
+
+        return @config
+
+    ###
+
+      Объекты состояния
+
+    ###
+
+    class State
+
+      constructor: (@url, @loadMethod, @initialize, @insert, @update, @remove) ->
+        @instance = null
+        @view = null
+
+      load: (callback) ->
+        @loadMethod @url, (instance) ->
+          callback @instance = instance
   
     ###
 
-    4) Выстраивается два объекта каллбеков с зависимостями:
-      1) Зависимости при загрузке от родительского;
-      2) Зависимости от анимации родительского;
+      Объект для асинхронной загрузки видов
 
     ###
+
+    _getParent = (routeName) ->
+      parentIndex = routeName.lastIndexOf ">"
+      routeName.slice 0, parentIndex if parentIndex isnt -1
+
+    class Listener
+
+      constructor: ->
+        @callbacks = { }
+
+      add: (type, handler) ->
+        callbacks = @callbacks[type]
+        callbacks = @callbacks[type] = [ ] unless callbacks
+        callbacks.push handler
+
+      run: (type) ->
+        callbacks = @callbacks[type]
+        return unless callbacks
+        callback() for callback in callbacks
+        callbacks.length = 0
 
     class LoadManager
 
-      class Observer
-        constructor: ->
-          @callbacks = [ ]
-
-        add: (callback) ->
-          @callbacks.push callback
-
-        run: ->
-          callback() for callback in @callbacks
-          @callbacks.length = 0
-
-      getParent = (routeName) ->
-        parentIndex = routeName.lastIndexOf ">"
-        routeName.slice 0, parentIndex if parentIndex isnt -1
-
-      constructor: (config) ->
+      constructor: (routes) ->
         @status = { }
-        @observers = { }
-        @observers[name] = new Observer for name, params of config
+        @listeners = { }
+        for route in routes
+          @status[route] = "unused"
+          @listeners[route] = new Listener
+
+      complete: (routeName, callback) ->
+        @status[routeName] = "loaded"
+        callback()
+        @listeners[routeName].run "load"
 
       onready: (routeName, callback) ->
-        parent = getParent routeName
+        
+        parent = _getParent routeName
+
         if parent
           if @status[parent] is "loaded"
-            @status[routeName] = "loaded"
-            callback()
-            @observers[routeName].run()
+            @complete routeName, -> callback()
           else
-            @observers[parent].add =>
-              callback()
-              @observers[routeName].run()
+            @listeners[parent].add "load", ->
+              @complete routeName, -> callback()
         else
-          @status[routeName] = "loaded"
-          callback()
-          @observers[routeName].run()
+          @complete routeName, -> callback()
 
     ###
 
-    5) Анимационный движок:
-      1) Хранит функции анимаций;
-      2) Выполняет анимацию в зависимости от priority;
-      3) Проверяет свойства alwaysRun и запускает анимации для дочерних;
-      4) Проверяет свойство inOrder и проводит анимации в порядке;
-
-    ###
-
-    class Animations
-      constructor: (animations) ->
-        @animations = { }
-        @animations[animationName] = animationConfig for animationName, animationConfig of animations
-
-      go: (selectorName, animationName, element, callback) ->
-        if selectorName.indexOf(">") is -1 or selectorName.indexOf(">") isnt -1 and @animations[selectorName].alwaysRun
-          if @animations[selectorName].animations[animationName]
-            @animations[selectorName].animations[animationName] element, callback
-          else
-            callback()
-        else
-          callback()
-
-    ###
-
-    1) Главный контролирующий загрузки и анимации объект:
-      1) Берет объект каллбеков загрузки и пользуется им;
-      2) Берет объект каллбеков анимаций и пользуется им;
+      Дает право выполнять внутрненние асинхронные операции в соответствии с порядком
 
     ###
 
     class AnimationsManager
 
-      class DoubleListener
-        constructor: ->
-          @preCallbacks = [ ]
-          @postCallbacks = [ ]
-
-        pre: (callback) ->
-          @preCallbacks.push callback
-
-        post: (callback) ->
-          @postCallbacks.push callback
-
-        run: (callback) ->
-          callback =>
-            postCallback() for postCallback in @postCallbacks
-            @postCallbacks.length = 0
-          preCallback() for preCallback in @preCallbacks
-          @preCallbacks.length = 0
-
-      constructor: (animationsSettings) ->
-        @settings = { }
+      constructor: (animationsConfig) ->
+        @options = { }
         @listeners = { }
-        @parents = [ ]
-        for animationName, animationSettings of animationsSettings
-          @settings[animationName] = animationSettings
-          @listeners[animationName] = new DoubleListener
+        for animationName, animationConfig of animationsConfig
+          @options[animationName] = animationConfig
+          @listeners[animationName] = new Listener
 
-      onready: do ->
-        count = 0
-        (routeName, callback) ->
-          parentIndex = routeName.lastIndexOf ">"
-          parent = routeName.slice 0, parentIndex if parentIndex isnt -1
+        @count = 0
+        @length = Object.keys(animationsConfig).length
 
-          if parent
-            if @settings[routeName].inOrder
-              @listeners[parent].post => @listeners[routeName].run callback
-            else
-              @listeners[parent].pre => @listeners[routeName].run callback
-          else
-            @parents.push => @listeners[routeName].run callback
+        @handlers = [ ]
 
-          if ++count is @callbacksLength
-            startCallback() for startCallback in @parents
-            @parents.length = 0
-            @callbacksLength = 0
-            count = 0
+      run: ->
+        if @count >= 0 then @count++ else @count = 1
+        if @count is @length
+          handlerToRun() for handlerToRun in @handlers
+          @count = 0
+          @handlers.length = 0
 
-      maxCalls: (@callbacksLength) ->
+      onready: (action, name, handlers, callback) ->
+        option = @options[name][action]
 
-    class RouterController
+        currentListener = @listeners[name]
 
-      class PriorityHandler
+        afterEndHandler = handlers.afterEnd
+        afterStartHandler = handlers.afterStart
 
-        constructor: (priorities) ->
-          @priorityMap = { }
-          for priorityName, prioritySettings of priorities
-            @priorityMap[priorityName] = prioritySettings.priority
+        parentIndex = name.lastIndexOf ">"
+        if parentIndex isnt -1
+          parent = name.slice 0, parentIndex
 
-        findPair: (routes, matchRouteName, type) ->
-          matchString = matchRouteName.slice 0, matchRouteName.lastIndexOf(":")
-          for routerName, routerValue of routes
-            if routerName.indexOf(matchString) isnt -1
-              if routerName.slice(matchString.length).indexOf(">") is -1
-                if type is "old"
-                  if routerValue is "new cache" or routerValue is "new"
-                    return routerName
-                else if type is "new cache" or type is "new"
-                  if routerValue is "old"
-                    return routerName
+          parentListener = @listeners[parent]
 
-        return: (routes, routeName, routeParam) ->
-          pairRoute = @findPair routes, routeName, routeParam
+          switch option
+            when "free"
+              parentListener.add "afterStart", =>
+                callback =>
+                  try afterEndHandler()
+                  currentListener.run "afterEnd"
+                setTimeout ->
+                  try afterStartHandler()
+                  currentListener.run "afterStart"
+            when "order"
+              parentListener.add "afterEnd", =>
+                callback =>
+                  try afterEndHandler()
+                  currentListener.run "afterEnd"
+                setTimeout ->
+                  try afterStartHandler()
+                  currentListener.run "afterStart"
+            when "none"
+              parentListener.add "afterStart", =>
+                setTimeout ->
+                  try
+                    afterStartHandler()
+                    afterEndHandler()
+                  currentListener.run "afterStart"
+                  currentListener.run "afterEnd"
+        else
+          @handlers = [ ] unless @handlers
+          handlres = @handlers
+          switch option
+            when "free" or "order"
+              handlres.push =>
+                callback =>
+                  try afterEndHandler()
+                  currentListener.run "afterEnd"
+                setTimeout ->
+                  try afterStartHandler()
+                  currentListener.run "afterStart"
+            when "none"
+              handlres.push =>
+                setTimeout ->
+                  try
+                    afterStartHandler()
+                    afterEndHandler()
+                  currentListener.run "afterStart"
+                currentListener.run "afterEnd"
 
-          previriousVerticalPriority = @priorityMap[routeName][0]
-          previriousHorisontalPriority = @priorityMap[routeName][1]
-          currentVerticalPriority = @priorityMap[pairRoute][0]
-          currentHorisontalPriority = @priorityMap[pairRoute][1]
+        @run()
 
-          if routeParam is "old"
-            if previriousVerticalPriority > currentVerticalPriority
-              "centerBottom"
-            else if previriousVerticalPriority < currentVerticalPriority
-              "centerTop"
-            else if previriousVerticalPriority is currentVerticalPriority
-              if previriousHorisontalPriority > currentHorisontalPriority
-                "centerRight"
-              else if previriousHorisontalPriority < currentHorisontalPriority
-                "centerLeft"
-          else if routeParam is "new" or routeParam is "new cache"
-            if previriousVerticalPriority > currentVerticalPriority
-              "bottomCenter"
-            else if previriousVerticalPriority < currentVerticalPriority
-              "topCenter"
-            else if previriousVerticalPriority is currentVerticalPriority
-              if previriousHorisontalPriority > currentHorisontalPriority
-                "rightCenter"
-              else if previriousHorisontalPriority < currentHorisontalPriority
-                "leftCenter"
+      empty: (settings) ->
+        name = settings.name
 
-      constructor: (routesConfig, animationsConfig) ->
-        @states = new StatesCollection routesConfig
-        @loadManager = new LoadManager routesConfig
-        @animations = new Animations animationsConfig.animations
-        @animationsQueueManager = new AnimationsManager animationsConfig.animationsSettings
-        @priorityHandler = new PriorityHandler animationsConfig.priorities
+        currentListener = @listeners[name]
 
-      run: (routes, params) ->
-        routerKeys = Object.keys routes
-        @animationsQueueManager.maxCalls routerKeys.length
-        for routeName, count in routerKeys
-          do (routeName, routeParam = routes[routeName], count) =>
-            currentState = @states.find routeName
-            switch routeParam
-              when "first"
-                currentState.get (instance) =>
-                  @loadManager.onready routeName, =>
-                    currentState.view = currentState.init instance, params?[routeName]
-                    @animationsQueueManager.onready routeName, (callback) =>
-                      @animations.go routeName, "first", currentState.view, -> callback()
-                      currentState.insert currentState.view
-              when "first cache"
-                @animationsQueueManager.onready routeName, (callback) =>
-                  @animations.go routeName, "first", currentState.view, -> callback()
-                  currentState.insert currentState.view
-              when "update"
-                @animationsQueueManager.onready routeName, (callback) =>
-                  @animations.go routeName, "update", currentState.view, -> callback()
-                  currentState.update currentState.view, params?[routeName]
-              when "new"
-                animationName = @priorityHandler.return routes, routeName, "new"
-                currentState.get (instance) =>
-                  @loadManager.onready routeName, =>
-                    currentState.view = currentState.init instance, params?[routeName]
-                    @animationsQueueManager.onready routeName, (callback) =>
-                      @animations.go routeName, animationName, currentState.view, -> callback()
-                      currentState.insert currentState.view
-              when "new cache"
-                animationName = @priorityHandler.return routes, routeName, "new cache"
-                @animationsQueueManager.onready routeName, (callback) =>
-                  @animations.go routeName, animationName, currentState.view, -> callback()
-                  currentState.insert currentState.view
-              when "last"
-                @animationsQueueManager.onready routeName, (callback) =>
-                  @animations.go routeName, "last", currentState.view, ->
-                    currentState.remove currentState.view
-                    callback()
-              when "old"
-                animationName = @priorityHandler.return routes, routeName, "old"
-                @animationsQueueManager.onready routeName, (callback) =>
-                  @animations.go routeName, animationName, currentState.view, ->
-                    currentState.remove currentState.view
-                    callback()
-              when "visible"
-                @animationsQueueManager.onready routeName, (callback) -> callback()
-              else
-                @animationsQueueManager.onready routeName, (callback) -> callback()
+        parentIndex = name.lastIndexOf ">"
+        if parentIndex isnt -1
+          parent = name.slice 0, parentIndex
+
+          @listeners[parent] = new Listener unless @listeners[parent]
+
+          parentListener = @listeners[parent]
+
+          parentListener.add "afterEnd", =>
+            setTimeout =>
+              currentListener.run "afterStart"
+              currentListener.run "afterEnd"
+        else
+          @handlers = [ ] unless @handlers
+          handlres = @handlers
+          handlres.push =>
+            setTimeout =>
+              currentListener.run "afterStart"
+              currentListener.run "afterEnd"
+
+        @run()
+
+    class AnimationsHandler
+      constructor: (animationsConfig) ->
+        @animations = { }
+        for animationName, animationConfig of animationsConfig
+          @animations[animationName] = animationConfig
+
+      do: (routeName, animationName, view, callback) ->
+        try
+          currentAnimation = @animations[routeName][animationName]
+          currentAnimation view, -> callback()
 
     ###
 
-    3) Объект предоставляющий текущее состояние роутера:
-      1) Хранит и обновляет текущее состояние роутера; 
+      Координирует запросы на обновление роутинга
 
     ###
 
     class RouterCoordinator
-
-      ###
-  
-        Мы можем узнать был ли на одном из селекторов ранее new или first или update или visible но на другом
-
-      ###
 
       _isNew = (states, checkedStateName) ->
         for stateName, stateValue of states
@@ -307,7 +273,7 @@ define ->
           (stateName, stateParams) ->
             stateParamsJSON = JSON.stringify stateParams
             result = false
-            result = on for cacheName, cacheValue of cache when cacheName is stateName and cacheValue is stateParamsJSON
+            result = on for cacheName, cacheValue of cache when cacheName is stateName and cacheValue isnt stateParamsJSON
             cache[stateName] = stateParamsJSON
             result
 
@@ -323,9 +289,9 @@ define ->
               if stateName isnt checkedStateName
                 return on
 
-      constructor: (statesConfig) ->
+      constructor: (coordinatesList) ->
         @config = { }
-        @config[stateName] = "unused" for stateName, stateConfig of statesConfig
+        @config[coordinate] = "unused" for coordinate in coordinatesList
   
       update: (requiredStates) ->
 
@@ -356,10 +322,141 @@ define ->
           else if configStateValue is "last" or configStateValue is "old"
             @config[configStateName] = "invisible"
 
-    constructor: (statesConfig, animationsConfig) ->
-      @routerController = new RouterController statesConfig, animationsConfig
-      @routerCoordinator = new RouterCoordinator statesConfig
+        @config
+
+    ###
+
+      Обрабатывает параметры приоритетов видов
+
+    ###
+
+    class PriorityHandler
+
+      constructor: (priorities) ->
+        @priorityMap = { }
+        for priorityName, priorityValue of priorities
+          @priorityMap[priorityName] = priorityValue
+
+      findPair: (routes, matchRouteName, type) ->
+        matchString = matchRouteName.slice 0, matchRouteName.lastIndexOf(":")
+        for routerName, routerValue of routes
+          if routerName.indexOf(matchString) isnt -1
+            if routerName.slice(matchString.length).indexOf(">") is -1
+              if type is "old"
+                if routerValue is "new cache" or routerValue is "new"
+                  return routerName
+              else if type is "new cache" or type is "new"
+                if routerValue is "old"
+                  return routerName
+
+      animationName: (routes, routeName, routeParam) ->
+        pairRoute = @findPair routes, routeName, routeParam
+
+        previriousVerticalPriority = @priorityMap[routeName][0]
+        previriousHorisontalPriority = @priorityMap[routeName][1]
+        currentVerticalPriority = @priorityMap[pairRoute][0]
+        currentHorisontalPriority = @priorityMap[pairRoute][1]
+
+        if routeParam is "old"
+          if previriousVerticalPriority > currentVerticalPriority
+            "centerBottom"
+          else if previriousVerticalPriority < currentVerticalPriority
+            "centerTop"
+          else if previriousVerticalPriority is currentVerticalPriority
+            if previriousHorisontalPriority > currentHorisontalPriority
+              "centerRight"
+            else if previriousHorisontalPriority < currentHorisontalPriority
+              "centerLeft"
+        else if routeParam is "new" or routeParam is "new cache"
+          if previriousVerticalPriority > currentVerticalPriority
+            "bottomCenter"
+          else if previriousVerticalPriority < currentVerticalPriority
+            "topCenter"
+          else if previriousVerticalPriority is currentVerticalPriority
+            if previriousHorisontalPriority > currentHorisontalPriority
+              "rightCenter"
+            else if previriousHorisontalPriority < currentHorisontalPriority
+              "leftCenter"
+
+
+    constructor: (routesConfig, animationsConfig, methodsConfig) ->
+      @config = new ConfigBuilder routesConfig, animationsConfig, methodsConfig
+
+      @states = { }
+      for stateName, stateSettings of @config.states
+        @states[stateName] = new State stateSettings.url, stateSettings.load, stateSettings.initialize, stateSettings.insert, stateSettings.update, stateSettings.remove
+
+      @loadManager = new LoadManager @config.loads
+
+      @animationsManager = new AnimationsManager @config.animationsProperties
+
+      @animationsHandler = new AnimationsHandler @config.animations
+
+      @routerCoordinator = new RouterCoordinator @config.coordinates
+
+      @priorityHandler = new PriorityHandler @config.priorities
 
     go: (requiredStates) ->
-      @routerCoordinator.update requiredStates
-      @routerController.run @routerCoordinator.config, requiredStates
+      stateCoordinates = @routerCoordinator.update requiredStates
+      routerKeys = Object.keys stateCoordinates
+      for routeName, count in routerKeys
+        do (routeName, routeCoordinate = stateCoordinates[routeName]) =>
+          currentState = @states[routeName]
+          currentStateChainNames = routeName.split ">"
+          currentStateSelector = currentStateChainNames[currentStateChainNames.length-1].split(":")[0]
+          switch routeCoordinate
+            when "first"
+              currentState.load (instance) =>
+                @loadManager.onready routeName, =>
+                  currentState.view = currentState.initialize instance, params?[routeName]
+                  do (view = currentState.view) =>
+                    @animationsManager.onready "show", routeName,
+                      afterStart: -> currentState.insert currentStateSelector, view
+                    , (done) => @animationsHandler.do routeName, "first", view, -> done()
+            when "first cache"
+              currentState.load (instance) =>
+                @loadManager.onready routeName, =>
+                  currentState.view = currentState.initialize instance, params?[routeName]
+                  do (view = currentState.view) =>
+                    @animationsManager.onready "show", routeName,
+                      afterStart: -> currentState.insert currentStateSelector, view
+                    , (done) => @animationsHandler.do routeName, "first", view, -> done()
+            when "update"
+              @loadManager.onready routeName, =>
+                do (view = currentState.view) =>
+                  @animationsManager.onready "show", routeName,
+                    afterStart: -> currentState.update currentState.view, params?[routeName]
+                  , (done) => @animationsHandler.do routeName, "update", view, -> done()
+            when "new"
+              currentState.load (instance) =>
+                animationName = @priorityHandler.animationName stateCoordinates, routeName, "new"
+                @loadManager.onready routeName, =>
+                  currentState.view = currentState.initialize instance, params?[routeName]
+                  do (view = currentState.view) =>
+                    @animationsManager.onready "swap", routeName,
+                      afterStart: -> currentState.insert currentStateSelector, view
+                    , (done) => @animationsHandler.do routeName, animationName, view, -> done()
+            when "new cache"
+              currentState.load (instance) =>
+                animationName = @priorityHandler.animationName stateCoordinates, routeName, "new"
+                @loadManager.onready routeName, =>
+                  currentState.view = currentState.initialize instance, params?[routeName]
+                  do (view = currentState.view) =>
+                    @animationsManager.onready "swap", routeName,
+                      afterStart: -> currentState.insert currentStateSelector, view
+                    , (done) => @animationsHandler.do routeName, animationName, view, -> done()
+            when "last"
+              @loadManager.onready routeName, =>
+                do (view = currentState.view) =>
+                  @animationsManager.onready "hide", routeName,
+                    afterEnd: -> currentState.remove view
+                  , (done) => @animationsHandler.do routeName, "last", view, ->  done()
+            when "old"
+              animationName = @priorityHandler.animationName stateCoordinates, routeName, "old"
+              @loadManager.onready routeName, =>
+                do (view = currentState.view) =>
+                  @animationsManager.onready "hide", routeName,
+                    afterEnd: -> currentState.remove view
+                  , (done) => @animationsHandler.do routeName, animationName, view, -> done()
+            else
+              @animationsManager.empty name: routeName

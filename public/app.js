@@ -4,178 +4,62 @@
     router = new Router({
       ".lvl-1-container:about": {
         url: "view/about/view",
-        init: function(About, params) {
-          return new About(params);
-        },
-        insert: function(about) {
-          return $(".lvl-1-container").append(about.$el);
-        },
-        update: function(about, params) {
-          return about.render(params);
-        },
-        remove: function(about) {
-          return about.$el.remove();
-        }
+        priority: "00"
       },
       ".lvl-1-container:manual": {
         url: "view/manual/view",
-        init: function(Manual, params) {
-          return new Manual(params);
-        },
-        insert: function(manual) {
-          return $(".lvl-1-container").append(manual.$el);
-        },
-        update: function(manual, params) {
-          return manual.render(params);
-        },
-        remove: function(manual) {
-          return manual.$el.remove();
-        }
+        priority: "01"
       },
       ".lvl-1-container:manual>.lvl-2-container:info": {
         url: "view/manual/info/view",
-        init: function(Info, params) {
-          return new Info(params);
-        },
-        insert: function(info) {
-          return $(".lvl-2-container").append(info.$el);
-        },
-        update: function(info, params) {
-          return info.render(params);
-        },
-        remove: function(info) {
-          return info.$el.remove();
-        }
+        priority: "00"
       },
       ".lvl-1-container:manual>.lvl-2-container:methods": {
         url: "view/manual/methods/view",
-        init: function(Methods, params) {
-          return new Methods(params);
-        },
-        insert: function(methods) {
-          return $(".lvl-2-container").append(methods.$el);
-        },
-        update: function(methods, params) {
-          return methods.render(params);
-        },
-        remove: function(methods) {
-          return methods.$el.remove();
-        }
+        priority: "10"
       },
       ".lvl-1-container:manual>.lvl-2-container:core": {
         url: "view/manual/core/view",
-        init: function(Core, params) {
-          return new Core(params);
-        },
-        insert: function(core) {
-          return $(".lvl-2-container").append(core.$el);
-        },
-        update: function(core, params) {
-          return core.render(params);
-        },
-        remove: function(core) {
-          return core.$el.remove();
-        }
+        priority: "20"
       },
-      ".lvl-1-container:manual>.lvl-2-container:how-it-work": {
+      ".lvl-1-container:manual>.lvl-2-container:howItWork": {
         url: "view/manual/how-it-work/view",
-        init: function(HowItWork, params) {
-          return new HowItWork(params);
-        },
-        insert: function(howItWork) {
-          return $(".lvl-2-container").append(howItWork.$el);
-        },
-        update: function(howItWork, params) {
-          return howItWork.render(params);
-        },
-        remove: function(howItWork) {
-          return howItWork.$el.remove();
-        }
+        priority: "30"
       },
       ".lvl-1-container:author": {
         url: "view/author/view",
-        init: function(Author, params) {
-          return new Author(params);
-        },
-        insert: function(author) {
-          return $(".lvl-1-container").append(author.$el);
-        },
-        update: function(author, params) {
-          return author.render(params);
-        },
-        remove: function(author) {
-          return author.$el.remove();
-        }
+        priority: "02"
       }
     }, {
-      animations: {
-        ".lvl-1-container:about": {
-          animations: lvl1ContainerViewAnimation
-        },
-        ".lvl-1-container:manual": {
-          animations: lvl1ContainerViewAnimation
-        },
-        ".lvl-1-container:manual>.lvl-2-container:info": {
-          animations: lvl2ContainerViewAnimation
-        },
-        ".lvl-1-container:manual>.lvl-2-container:methods": {
-          animations: lvl2ContainerViewAnimation
-        },
-        ".lvl-1-container:manual>.lvl-2-container:core": {
-          animations: lvl2ContainerViewAnimation
-        },
-        ".lvl-1-container:manual>.lvl-2-container:how-it-work": {
-          animations: lvl2ContainerViewAnimation
-        },
-        ".lvl-1-container:author": {
-          animations: lvl1ContainerViewAnimation
-        }
+      ".lvl-1-container": {
+        animations: lvl1ContainerViewAnimation,
+        show: "free",
+        swap: "free",
+        hide: "free"
       },
-      animationsSettings: {
-        ".lvl-1-container:about": {
-          inOrder: true
-        },
-        ".lvl-1-container:manual": {
-          inOrder: true
-        },
-        ".lvl-1-container:manual>.lvl-2-container:info": {
-          inOrder: false
-        },
-        ".lvl-1-container:manual>.lvl-2-container:methods": {
-          inOrder: true
-        },
-        ".lvl-1-container:manual>.lvl-2-container:core": {
-          inOrder: true
-        },
-        ".lvl-1-container:manual>.lvl-2-container:how-it-work": {
-          inOrder: true
-        },
-        ".lvl-1-container:author": {
-          inOrder: true
-        }
+      ".lvl-1-container>.lvl-2-container": {
+        animations: lvl2ContainerViewAnimation,
+        show: "free",
+        swap: "free",
+        hide: "free"
+      }
+    }, {
+      load: function(url, callback) {
+        return require([url], function(data) {
+          return callback(data);
+        });
       },
-      priorities: {
-        ".lvl-1-container:about": {
-          priority: "00"
-        },
-        ".lvl-1-container:manual": {
-          priority: "01"
-        },
-        ".lvl-1-container:manual>.lvl-2-container:info": {
-          priority: "00"
-        },
-        ".lvl-1-container:manual>.lvl-2-container:methods": {
-          priority: "10"
-        },
-        ".lvl-1-container:manual>.lvl-2-container:core": {
-          priority: "20"
-        },
-        ".lvl-1-container:manual>.lvl-2-container:how-it-work": {
-          priority: "30"
-        },
-        ".lvl-1-container:author": {
-          priority: "02"
-        }
+      initialize: function(Instance, params) {
+        return new Instance(params);
+      },
+      insert: function(containerSelector, instance) {
+        return $(containerSelector).append(instance.$el);
+      },
+      update: function(instance, params) {
+        return instance.render(params);
+      },
+      remove: function(instance) {
+        return instance.$el.remove();
       }
     });
     PageRoute = Backbone.Router.extend({
@@ -206,7 +90,7 @@
         "manual/how-it-work": function() {
           return router.go({
             ".lvl-1-container:manual": null,
-            ".lvl-1-container:manual>.lvl-2-container:how-it-work": null
+            ".lvl-1-container:manual>.lvl-2-container:howItWork": null
           });
         },
         "author": function() {
