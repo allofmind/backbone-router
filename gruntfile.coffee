@@ -19,7 +19,7 @@ module.exports = (grunt) ->
           interval: 0
           atBegin: on
           livereload: on
-          interrupt: on
+          # interrupt: on
 
       style:
         files: [ "public/**/*.sass" ]
@@ -30,10 +30,10 @@ module.exports = (grunt) ->
           interval: 0
           atBegin: on
           livereload: on
-          interrupt: on
+          # interrupt: on
 
       script:
-        files: [ "controller/**/*.coffee", "public/**/*.coffee", "!gruntfile.coffee" ]
+        files: [ "server.coffee", "public/**/*.coffee", "!gruntfile.coffee" ]
         tasks: [ "coffee:compile" ]
         options:
           spawn: off
@@ -41,7 +41,7 @@ module.exports = (grunt) ->
           interval: 0
           atBegin: on
           livereload: on
-          interrupt: on
+          # interrupt: on
 
     express:
       dev:
@@ -54,7 +54,7 @@ module.exports = (grunt) ->
         files: [
           expand: on
           cwd: "./"
-          src: [ "controller/**/*.coffee", "public/**/*.coffee", "!gruntfile.coffee" ]
+          src: [ "server.coffee", "public/**/*.coffee", "!gruntfile.coffee" ]
           dest: "./"
           ext: ".js"
         ]
@@ -73,7 +73,7 @@ module.exports = (grunt) ->
 
     shell:
       mongodb:
-        command: "mongod --dbpath db"
+        command: "mongod --dbpath D:/db"
         options:
           async: on
           stdout: off
@@ -82,4 +82,4 @@ module.exports = (grunt) ->
           execOptions:
             cwd: "."
 
-  grunt.task.run "shell:mongodb"
+  # grunt.task.run "shell:mongodb"
