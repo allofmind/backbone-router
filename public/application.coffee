@@ -1,107 +1,83 @@
 define [
-  "view/home/home-animations"
-  "view/home/main/main-animations"
-  "view/home/main/one/one-animations"
+  "view/animations"
+  "view/news/animations"
 ], (
-  homeAnimations
   mainAnimations
-  oneAnimations
+  newsAnimations
 ) ->
 
 
+  console.log view
   console.log router
+  console.log navigation
 
 
-  router.setMethods
-    load: (url, callback) -> require [ url ], (data) -> callback data
-    initialize: (Instance, params) -> new Instance params
-    insert: (containerSelector, instance) -> $(containerSelector).append instance.$el
-    update: (instance, params) -> instance.render params
-    remove: (instance) -> instance.$el.remove()
-
-
-  router.setViews
-    ".home-container:home":
-      url: "view/home/home-view"
-      afterInitialize: ->
-        $("#home").on "click", -> router.go "#/"
-        $("#main").on "click", -> router.go "#/main"
-        $("#main1").on "click", -> router.go "#/main1"
-        $("#one").on "click", -> router.go "#/main/one"
-        $("#two").on "click", -> router.go "#/main/two"
-        $("#three").on "click", -> router.go "#/main/three"
-    ".home-container:home>.main-container:main":
-      url: "view/home/main/main-view"
-    ".home-container:home>.main-container:main1":
-      url: "view/home/main/main-view"
-    ".home-container:home>.main-container:main>.one-container:one":
-      url: "view/home/main/one/one-view"
-    ".home-container:home>.main-container:main>.two-container:two":
-      url: "view/home/main/two/two-view"
-      priority: "00"
-    ".home-container:home>.main-container:main>.two-container:three":
-      url: "view/home/main/three/three-view"
-      priority: "01"
-
-
-  router.setAnimations [
-      states: [
-        ".home-container:home"
-      ]
-      animations: homeAnimations
+  view.extend
+      load: (url, callback) -> require [ url ], (data) -> callback data
+      initialize: (Instance, params) -> new Instance params
+      insert: (containerSelector, instance) -> $(containerSelector).append instance.$el
+      update: (instance, params) -> instance.render params
+      remove: (instance) -> instance.$el.remove()
     ,
-      states: [
-        ".home-container:home>.main-container:main"
-        ".home-container:home>.main-container:main1"
-      ]
-      animations: oneAnimations
+      ".main-container:welcome":
+        url: "view/welcome/view"
+        priority: "00"
+      ".main-container:news":
+        url: "view/news/view"
+        priority: "01"
+      ".main-container:news>.list-container:list":
+        url: "view/news/list/view"
+      ".main-container:news>.chat-container:chat":
+        url: "view/news/chat/view"
+      ".main-container:contacts":
+        url: "view/home/main/main-view"
     ,
-      states: [
-        ".home-container:home>.main-container:main>.one-container:one"
-        ".home-container:home>.main-container:main>.two-container:two"
-        ".home-container:home>.main-container:main>.two-container:three"
+      [
+          states: [
+            ".main-container:welcome"
+            ".main-container:news"
+            ".main-container:contacts"
+          ]
+          animations: mainAnimations
+        ,
+          states: [
+            ".main-container:news>.list-container:list"
+            ".main-container:news>.chat-container:chat"
+          ]
+          animations: newsAnimations
+          show: "order"
+          shap: "order"
       ]
-      animations: oneAnimations
-      show: "order"
-  ]
 
 
-  router.setRoutes
-      "#/": (params) ->
-        console.log "#/"
-        ".home-container:home": params
+  router.extend
+    "#/welcome": (params) ->
+      console.log "#/welcome"
+      ".main-container:welcome": null
 
-      "#/main": (params) ->
-        console.log "#/main"
-        ".home-container:home": null
-        ".home-container:home>.main-container:main": params
+    "#/news": (params) ->
+      console.log "#/"
+      ".main-container:news": null
 
-      "#/main/one": (params) ->
-        console.log "#/main/one"
-        ".home-container:home": null
-        ".home-container:home>.main-container:main": null
-        ".home-container:home>.main-container:main>.one-container:one": params
+    "#/news/list": (params) ->
+      console.log "#/news/list"
+      ".main-container:news": 3
+      # ".main-container:news>.list-container:list": null
 
-      "#/main/two": (params) ->
-        console.log "#/main/two"
-        ".home-container:home": null
-        ".home-container:home>.main-container:main": null
-        ".home-container:home>.main-container:main>.two-container:two": params
+    "#/news/chat": (params) ->
+      console.log "#/news/chat"
+      ".main-container:news": 6
+      ".main-container:news>.chat-container:chat": null
 
-      "#/main/three": (params) ->
-        console.log "#/main/three"
-        ".home-container:home": null
-        ".home-container:home>.main-container:main": null
-        ".home-container:home>.main-container:main>.two-container:three": params
-
-      "#/main1": (params) ->
-        console.log "#/main1"
-        ".home-container:home": null
-        ".home-container:home>.main-container:main1": params
-    ,
-      "#/main": "id-1"
-      "#/main1": "id-1"
-      "#/main/two": "id-2"
-      "#/main/three": "id-2"
+    "#/contacts": (params) ->
+      console.log "#/contacts"
+      ".main-container:contacts": null
 
   router.start()
+
+  navigation.extend
+    "#/welcome": "1"
+    "#/news": "1"
+    "#/news/list": "2"
+    "#/news/chat": "2"
+    "#/contacts": "1"

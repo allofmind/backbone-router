@@ -63,6 +63,7 @@ module.exports = (grunt) ->
       compile:
         options:
           sourcemap: "none"
+          noCache: on
         files: [
           expand: on
           cwd: "./"

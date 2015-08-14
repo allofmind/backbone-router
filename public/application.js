@@ -1,7 +1,9 @@
 (function() {
-  define(["view/home/home-animations", "view/home/main/main-animations", "view/home/main/one/one-animations"], function(homeAnimations, mainAnimations, oneAnimations) {
+  define(["view/animations", "view/news/animations"], function(mainAnimations, newsAnimations) {
+    console.log(view);
     console.log(router);
-    router.setMethods({
+    console.log(navigation);
+    view.extend({
       load: function(url, callback) {
         return require([url], function(data) {
           return callback(data);
@@ -19,114 +21,76 @@
       remove: function(instance) {
         return instance.$el.remove();
       }
-    });
-    router.setViews({
-      ".home-container:home": {
-        url: "view/home/home-view",
-        afterInitialize: function() {
-          $("#home").on("click", function() {
-            return router.go("#/");
-          });
-          $("#main").on("click", function() {
-            return router.go("#/main");
-          });
-          $("#main1").on("click", function() {
-            return router.go("#/main1");
-          });
-          $("#one").on("click", function() {
-            return router.go("#/main/one");
-          });
-          $("#two").on("click", function() {
-            return router.go("#/main/two");
-          });
-          return $("#three").on("click", function() {
-            return router.go("#/main/three");
-          });
-        }
-      },
-      ".home-container:home>.main-container:main": {
-        url: "view/home/main/main-view"
-      },
-      ".home-container:home>.main-container:main1": {
-        url: "view/home/main/main-view"
-      },
-      ".home-container:home>.main-container:main>.one-container:one": {
-        url: "view/home/main/one/one-view"
-      },
-      ".home-container:home>.main-container:main>.two-container:two": {
-        url: "view/home/main/two/two-view",
+    }, {
+      ".main-container:welcome": {
+        url: "view/welcome/view",
         priority: "00"
       },
-      ".home-container:home>.main-container:main>.two-container:three": {
-        url: "view/home/main/three/three-view",
+      ".main-container:news": {
+        url: "view/news/view",
         priority: "01"
+      },
+      ".main-container:news>.list-container:list": {
+        url: "view/news/list/view"
+      },
+      ".main-container:news>.chat-container:chat": {
+        url: "view/news/chat/view"
+      },
+      ".main-container:contacts": {
+        url: "view/home/main/main-view"
       }
-    });
-    router.setAnimations([
+    }, [
       {
-        states: [".home-container:home"],
-        animations: homeAnimations
+        states: [".main-container:welcome", ".main-container:news", ".main-container:contacts"],
+        animations: mainAnimations
       }, {
-        states: [".home-container:home>.main-container:main", ".home-container:home>.main-container:main1"],
-        animations: oneAnimations
-      }, {
-        states: [".home-container:home>.main-container:main>.one-container:one", ".home-container:home>.main-container:main>.two-container:two", ".home-container:home>.main-container:main>.two-container:three"],
-        animations: oneAnimations,
-        show: "order"
+        states: [".main-container:news>.list-container:list", ".main-container:news>.chat-container:chat"],
+        animations: newsAnimations,
+        show: "order",
+        shap: "order"
       }
     ]);
-    router.setRoutes({
-      "#/": function(params) {
+    router.extend({
+      "#/welcome": function(params) {
+        console.log("#/welcome");
+        return {
+          ".main-container:welcome": null
+        };
+      },
+      "#/news": function(params) {
         console.log("#/");
         return {
-          ".home-container:home": params
+          ".main-container:news": null
         };
       },
-      "#/main": function(params) {
-        console.log("#/main");
+      "#/news/list": function(params) {
+        console.log("#/news/list");
         return {
-          ".home-container:home": null,
-          ".home-container:home>.main-container:main": params
+          ".main-container:news": 3
         };
       },
-      "#/main/one": function(params) {
-        console.log("#/main/one");
+      "#/news/chat": function(params) {
+        console.log("#/news/chat");
         return {
-          ".home-container:home": null,
-          ".home-container:home>.main-container:main": null,
-          ".home-container:home>.main-container:main>.one-container:one": params
+          ".main-container:news": 6,
+          ".main-container:news>.chat-container:chat": null
         };
       },
-      "#/main/two": function(params) {
-        console.log("#/main/two");
+      "#/contacts": function(params) {
+        console.log("#/contacts");
         return {
-          ".home-container:home": null,
-          ".home-container:home>.main-container:main": null,
-          ".home-container:home>.main-container:main>.two-container:two": params
-        };
-      },
-      "#/main/three": function(params) {
-        console.log("#/main/three");
-        return {
-          ".home-container:home": null,
-          ".home-container:home>.main-container:main": null,
-          ".home-container:home>.main-container:main>.two-container:three": params
-        };
-      },
-      "#/main1": function(params) {
-        console.log("#/main1");
-        return {
-          ".home-container:home": null,
-          ".home-container:home>.main-container:main1": params
+          ".main-container:contacts": null
         };
       }
-    }, {
-      "#/main": "id-1",
-      "#/main1": "id-1",
-      "#/main/two": "id-2",
-      "#/main/three": "id-2"
     });
-    return router.start();
+    router.start();
+    return navigation.extend({
+      "#/welcome": "1",
+      "#/news": "1",
+      "#/news/list": "2",
+      "#/news/chat": "2",
+      "#/contacts": "1"
+    });
   });
 
 }).call(this);

@@ -1,6 +1,7 @@
 (function() {
   define(function() {
-    return _.templateSettings.interpolate = /\{(.+?)\}/g;
+    _.templateSettings.interpolate = /\{(.+?)\}/g;
+    return TweenLite.ticker.fps(10);
   });
 
 }).call(this);
